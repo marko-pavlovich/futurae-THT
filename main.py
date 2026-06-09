@@ -21,6 +21,13 @@ DEFAULT_METRICS = [
     "cloud_cover",
 ]
 
+METRICS_RANGES = {
+    "temperature_2m":       (-80, 60),
+    "precipitation":        (0, 500),
+    "wind_speed_10m":       (0, 200),
+    "cloud_cover":          (0, 100),
+}
+
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 
 def get_coordinates(city_name):
@@ -101,6 +108,8 @@ def fetch_city(client, city_name, city_coords, metrics_params):
 
 def fetch_all_data(client, cities, metrics_params):
     
+    # fetch data for all cities, catch an exception if it fails
+    
     frames = []
     
     for city_name, coords in cities.items():
@@ -109,11 +118,50 @@ def fetch_all_data(client, cities, metrics_params):
             frames.append(df)
         except Exception as e:
             print(f"Error when fetching data for city {city_name} - {e}")
-            
-    return pd.concat(frames, ignore_index=False)   
     
+    if not frames:
+        raise RuntimeError("No data fetched - all cities failed")    
+    return pd.concat(frames, ignore_index=True)   
+    
+def clean_data(df):
+    
+    df["time"] = pd.to_datetime(df["time"])
+    df["city"] = df["city"].astype(str)
+    
+    numeric_cols = [col for col in df.columns if col not in ("time", "city")]
+    df[numeric_cols] = df[numeric_cols].astype(float)
+    
+    missing = df.isnull().sum()
+    if missing.any():
+        print(f"Warning: missing values found:\n{missing[missing>0]} ")
+        print(f"Imputed with mean")
+        df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
 
+    return df
 
+def validate_data(df):
+    
+    invalidations = []
+    
+    for metric, (low, high) in METRICS_RANGES.items():
+        
+        if metric not in df.columns:
+            continue
+        
+        out_of_range = out_of_range = ~df[metric].between(low, high)
+        
+        if out_of_range.any():
+            invalidations.append(f"{metric}: {out_of_range.sum()} values out of range [{low}, {high}]")
+        
+    if invalidations:
+        print("Validation warnings")
+        for invalidation in invalidations:
+            print(invalidation)
+    
+    else:
+        print("Validation passed")
+        
+        
 def main():
     
     args = parse_args()
@@ -122,9 +170,12 @@ def main():
     
     selected_cities = DEFAULT_CITIES | dict(args.extra_cities)
     
-    data = fetch_all_data(client=client, cities=selected_cities, metrics_params=DEFAULT_METRICS)
-
-    print(data)
+    df = fetch_all_data(client=client, cities=selected_cities, metrics_params=DEFAULT_METRICS)
+    df_cleaned = clean_data(df=df)
+    
+    validate_data(df=df_cleaned)
+    
+    print(df_cleaned)
     
 if __name__ == "__main__":
     main()
