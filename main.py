@@ -182,7 +182,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     df["city"] = df["city"].astype(str)
 
     numeric_cols = [col for col in df.columns if col not in ("time", "city")]
-    df[numeric_cols] = df[numeric_cols].astype(float)
+    df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
 
     missing = df.isnull().sum()
     if missing.any():

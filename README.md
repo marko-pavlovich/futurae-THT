@@ -58,6 +58,7 @@ Results are saved to `output/weather_{cities}_{mode}_{date}.csv`. A summary tabl
 - **6-hour cache** - API responses are cached for 6 hours via `requests-cache`, matching Open-Meteo's global model update frequency and avoiding redundant calls during repeated runs.
 - **`rich` for terminal output** - used for readable, formatted console tables instead of raw print statements.
 - **Added additional features** - added options to include more cities, and to have a more advanced overview of the weather data, the console is dynamically updated for both cases
+- **Single file** - the project is simple enough to keep in a single `main.py`. For a larger pipeline, it would make sense to separate it logically into `fetch.py`, `clean.py`, `parse.py`, and `main.py` as an entry point.
 
 ## Things I would improve
 
