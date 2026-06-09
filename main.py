@@ -14,6 +14,15 @@ DEFAULT_CITIES = {
     "new_york": {"latitude": 40.71, "longitude": -74.01},
 }
 
+DEFAULT_METRICS = [
+    "temperature_2m",
+    "precipitation",
+    "wind_speed_10m",
+    "cloud_cover",
+]
+
+FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+
 def get_coordinates(city_name):
     
     # lookup city coordinates using the open-meteo api
@@ -63,12 +72,59 @@ def parse_args():
     
     return parser.parse_args()
 
+def fetch_city(client, city_name, city_coords, metrics_params):
+    
+    # fetch required data for a single city, all the data from metrics_params is included
+    
+    params = {
+        "latitude" : city_coords["latitude"],
+        "longitude" : city_coords["longitude"],
+        "hourly" : metrics_params,
+        "forecast_days" : 7
+    }
+    
+    response = client.weather_api(FORECAST_URL, params=params)[0]
+    
+    hourly = response.Hourly()
+    
+    data = {"time": pd.date_range(
+        start=pd.to_datetime(hourly.Time(), unit="s"),
+        end=pd.to_datetime(hourly.TimeEnd(), unit="s"),
+        freq=pd.Timedelta(seconds=hourly.Interval()),
+        inclusive="left"
+    ), "city": city_name}
+    
+    for i, var in enumerate(metrics_params):
+        data[var] = hourly.Variables(i).ValuesAsNumpy()
+    
+    return pd.DataFrame(data)
+
+def fetch_all_data(client, cities, metrics_params):
+    
+    frames = []
+    
+    for city_name, coords in cities.items():
+        try:
+            df = fetch_city(client=client, city_name=city_name, city_coords=coords, metrics_params=metrics_params)
+            frames.append(df)
+        except Exception as e:
+            print(f"Error when fetching data for city {city_name} - {e}")
+            
+    return pd.concat(frames, ignore_index=False)   
+    
+
+
 def main():
     
     args = parse_args()
     
+    client = openmeteo_requests.Client()
+    
     selected_cities = DEFAULT_CITIES | dict(args.extra_cities)
-    print(selected_cities)
+    
+    data = fetch_all_data(client=client, cities=selected_cities, metrics_params=DEFAULT_METRICS)
 
+    print(data)
+    
 if __name__ == "__main__":
     main()
