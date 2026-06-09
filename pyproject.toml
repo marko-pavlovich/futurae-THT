@@ -9,4 +9,5 @@ dependencies = [
     "openmeteo-requests>=1.7.5",
     "pandas>=3.0.3",
     "requests>=2.34.2",
+    "rich>=15.0.0",
 ]

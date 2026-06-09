@@ -1,14 +1,17 @@
 import argparse
 import os
-import requests
 from datetime import datetime
 
-
 import numpy as np
-import pandas as pd
 import openmeteo_requests
+import pandas as pd
+import requests
+from rich.console import Console
+from rich.table import Table
 
 OUTPUT_DIR = "output"
+
+console = Console()
 
 
 DEFAULT_CITIES = {
@@ -166,13 +169,20 @@ def validate_data(df):
 
 def print_summary(df):
     
-    average_temp = df.groupby("city")["temperature_2m"].mean().round(2)
-    total_precipitation = df.groupby("city")["precipitation"].sum().round(2)
+    avg_temp = df.groupby("city")["temperature_2m"].mean().round(2)
+    total_precip = df.groupby("city")["precipitation"].sum().round(2)
     coldest_row = df.loc[df["temperature_2m"].idxmin()]
-    
-    print(f"Average temperature over the 7 days per city:\n{average_temp}\n")
-    print(f"Total precipitation over the 7 days per city:\n{total_precipitation}\n")
-    print(f"Coldest hour across all cities: {coldest_row['city']} at {coldest_row['time']}: {round(coldest_row['temperature_2m'], 2)}°C\n")
+
+    table = Table(title="7-day weather summary")
+    table.add_column("city", style="bold")
+    table.add_column("avg temp (°C)", justify="right")
+    table.add_column("total precip (mm)", justify="right")
+
+    for city in avg_temp.index:
+        table.add_row(city, str(avg_temp[city]), str(total_precip[city]))
+
+    console.print(table)
+    console.print(f"\n[bold]coldest hour:[/bold] {coldest_row['city']} at {coldest_row['time']} — {round(coldest_row['temperature_2m'],2)}°C")
         
 def main():
     
