@@ -1,11 +1,11 @@
 import argparse
 import os
-from datetime import datetime
+from datetime import timedelta
 
-import numpy as np
 import openmeteo_requests
 import pandas as pd
 import requests
+import requests_cache
 from rich.console import Console
 from rich.table import Table
 
@@ -229,7 +229,8 @@ def main():
     args = parse_args()
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
-    client = openmeteo_requests.Client()
+    cache_session = requests_cache.CachedSession(".cache", expire_after=timedelta(hours=6))
+    client = openmeteo_requests.Client(session=cache_session)
     
     selected_cities = DEFAULT_CITIES | dict(args.extra_cities)
     
@@ -240,9 +241,11 @@ def main():
     
     validate_data(df=df_cleaned)
         
-    timestamp = df["time"].min().strftime("%Y%m%d_%H%M%S")
-    df_cleaned.to_csv(f"{OUTPUT_DIR}/weather_data_{timestamp}.csv", index=False)
-    print(f"Data can be found at {OUTPUT_DIR}/weather_data_{timestamp}.csv\n")
+    cities_str = "_".join(sorted(selected_cities.keys()))
+    timestamp = df["time"].min().strftime("%Y%m%d")
+    filename = f"weather_{cities_str}_{args.mode}_{timestamp}.csv"
+    df_cleaned.to_csv(f"{OUTPUT_DIR}/{filename}", index=False)
+    print(f"Data can be found at {OUTPUT_DIR}/{filename}\n")
     
     print_summary(df_cleaned, mode=args.mode)
     
