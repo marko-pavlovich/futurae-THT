@@ -1,9 +1,12 @@
 import argparse
+import os
+import requests
+from datetime import datetime
+
 
 import numpy as np
 import pandas as pd
 import openmeteo_requests
-import requests
 
 OUTPUT_DIR = "output"
 
@@ -148,7 +151,7 @@ def validate_data(df):
         if metric not in df.columns:
             continue
         
-        out_of_range = out_of_range = ~df[metric].between(low, high)
+        out_of_range = ~df[metric].between(low, high)
         
         if out_of_range.any():
             invalidations.append(f"{metric}: {out_of_range.sum()} values out of range [{low}, {high}]")
@@ -160,11 +163,21 @@ def validate_data(df):
     
     else:
         print("Validation passed")
-        
+
+def print_summary(df):
+    
+    average_temp = df.groupby("city")["temperature_2m"].mean().round(2)
+    total_precipitation = df.groupby("city")["precipitation"].sum().round(2)
+    coldest_row = df.loc[df["temperature_2m"].idxmin()]
+    
+    print(f"Average temperature over the 7 days per city:\n{average_temp}\n")
+    print(f"Total precipitation over the 7 days per city:\n{total_precipitation}\n")
+    print(f"Coldest hour across all cities: {coldest_row['city']} at {coldest_row['time']}: {round(coldest_row['temperature_2m'], 2)}°C\n")
         
 def main():
     
     args = parse_args()
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     
     client = openmeteo_requests.Client()
     
@@ -174,8 +187,12 @@ def main():
     df_cleaned = clean_data(df=df)
     
     validate_data(df=df_cleaned)
+        
+    timestamp = df["time"].min().strftime("%Y%m%d_%H%M%S")
+    df_cleaned.to_csv(f"{OUTPUT_DIR}/weather_data_{timestamp}.csv", index=False)
+    print(f"Data can be found at {OUTPUT_DIR}/weather_data_{timestamp}.csv\n")
     
-    print(df_cleaned)
+    print_summary(df_cleaned)
     
 if __name__ == "__main__":
     main()
