@@ -27,11 +27,24 @@ DEFAULT_METRICS = [
     "cloud_cover",
 ]
 
+ADVANCED_METRICS = DEFAULT_METRICS + [
+    "apparent_temperature",
+    "relative_humidity_2m",
+    "uv_index",
+    "wind_gusts_10m",
+    "surface_pressure",
+]
+
 METRICS_RANGES = {
-    "temperature_2m":       (-80, 60),
-    "precipitation":        (0, 500),
-    "wind_speed_10m":       (0, 200),
-    "cloud_cover":          (0, 100),
+    "temperature_2m": (-80, 60),
+    "precipitation": (0, 500),
+    "wind_speed_10m": (0, 200),
+    "cloud_cover": (0, 100),
+    "apparent_temperature": (-80, 60),
+    "relative_humidity_2m": (0, 100),
+    "uv_index": (0, 20),
+    "wind_gusts_10m": (0, 300),
+    "surface_pressure": (800, 1100),
 }
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
@@ -83,6 +96,13 @@ def parse_args():
         help="Cities to fetch by their name. Default is zurich, london, new_york"
         )
     
+    parser.add_argument(
+        "--mode",
+        choices=["basic", "advanced"],
+        default="basic",
+        help="basic: core metrics + cloud cover (default). advanced: extended variable set"
+    )
+    
     return parser.parse_args()
 
 def fetch_city(client, city_name, city_coords, metrics_params):
@@ -131,6 +151,8 @@ def fetch_all_data(client, cities, metrics_params):
     
 def clean_data(df):
     
+    # convert to appropriate datatypes and impute missing values
+    
     df["time"] = pd.to_datetime(df["time"])
     df["city"] = df["city"].astype(str)
     
@@ -146,6 +168,8 @@ def clean_data(df):
     return df
 
 def validate_data(df):
+    
+    # validate the values received from the api
     
     invalidations = []
     
@@ -167,8 +191,8 @@ def validate_data(df):
     else:
         print("Validation passed")
 
-def print_summary(df):
-    
+def print_summary(df, mode="basic"):
+
     avg_temp = df.groupby("city")["temperature_2m"].mean().round(2)
     total_precip = df.groupby("city")["precipitation"].sum().round(2)
     coldest_row = df.loc[df["temperature_2m"].idxmin()]
@@ -178,12 +202,28 @@ def print_summary(df):
     table.add_column("avg temp (°C)", justify="right")
     table.add_column("total precip (mm)", justify="right")
 
+    if mode == "advanced":
+        avg_wind = df.groupby("city")["wind_speed_10m"].mean().round(2)
+        avg_humidity = df.groupby("city")["relative_humidity_2m"].mean().round(2)
+        max_uv = df.groupby("city")["uv_index"].max().round(2)
+        max_gusts = df.groupby("city")["wind_gusts_10m"].max().round(2)
+        avg_feels_like = df.groupby("city")["apparent_temperature"].mean().round(2)
+
+        table.add_column("avg wind (km/h)", justify="right")
+        table.add_column("avg humidity (%)", justify="right")
+        table.add_column("max uv index", justify="right")
+        table.add_column("max gusts (km/h)", justify="right")
+        table.add_column("feels like (°C)", justify="right")
+
     for city in avg_temp.index:
-        table.add_row(city, str(avg_temp[city]), str(total_precip[city]))
+        row = [city, str(avg_temp[city]), str(total_precip[city])]
+        if mode == "advanced":
+            row.extend([str(avg_wind[city]), str(avg_humidity[city]), str(max_uv[city]), str(max_gusts[city]), str(avg_feels_like[city])])
+        table.add_row(*row)
 
     console.print(table)
-    console.print(f"\n[bold]coldest hour:[/bold] {coldest_row['city']} at {coldest_row['time']} — {round(coldest_row['temperature_2m'],2)}°C")
-        
+    console.print(f"\n[bold]coldest hour:[/bold] {coldest_row['city']} at {coldest_row['time']} — {round(coldest_row['temperature_2m'], 2)}°C\n")
+    
 def main():
     
     args = parse_args()
@@ -193,7 +233,9 @@ def main():
     
     selected_cities = DEFAULT_CITIES | dict(args.extra_cities)
     
-    df = fetch_all_data(client=client, cities=selected_cities, metrics_params=DEFAULT_METRICS)
+    metrics = ADVANCED_METRICS if args.mode == "advanced" else DEFAULT_METRICS
+    df = fetch_all_data(client=client, cities=selected_cities, metrics_params=metrics)
+    
     df_cleaned = clean_data(df=df)
     
     validate_data(df=df_cleaned)
@@ -202,7 +244,7 @@ def main():
     df_cleaned.to_csv(f"{OUTPUT_DIR}/weather_data_{timestamp}.csv", index=False)
     print(f"Data can be found at {OUTPUT_DIR}/weather_data_{timestamp}.csv\n")
     
-    print_summary(df_cleaned)
+    print_summary(df_cleaned, mode=args.mode)
     
 if __name__ == "__main__":
     main()
