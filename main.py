@@ -260,7 +260,7 @@ def print_summary(df: pd.DataFrame, mode: str = "basic"):
 
     console.print(table)
     console.print(
-        f"\n[bold]coldest hour:[/bold] {coldest_row['city']} at {coldest_row['time']} — {round(coldest_row['temperature_2m'], 2)}°C\n"
+        f"\n[bold]coldest hour:[/bold] {coldest_row['city']} at {coldest_row['time']} — {round(float(coldest_row['temperature_2m']), 2)}°C\n"
     )
 
 
